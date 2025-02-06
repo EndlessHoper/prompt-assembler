@@ -1,9 +1,11 @@
+
 import React, { useState } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { FileText, Folder, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { Textarea } from "@/components/ui/textarea";
 
 interface PromptItem {
   id: string;
@@ -97,11 +99,30 @@ export const PromptAssembler = () => {
     URL.revokeObjectURL(url);
   };
 
+  const renderContent = () => {
+    return items.map((item, index) => (
+      <div key={item.id} className="mb-2">
+        {item.type === "text" ? (
+          <p className="text-gray-700">{item.content}</p>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2 bg-gray-50 hover:bg-gray-100"
+          >
+            <FileText className="h-4 w-4 text-promptcraft-500" />
+            {item.fileName}
+          </Button>
+        )}
+      </div>
+    ));
+  };
+
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-promptcraft-900 mb-2">PromptCraft</h1>
-        <p className="text-gray-600">Drag and drop to assemble your perfect prompt</p>
+        <p className="text-gray-600">Assemble your perfect prompt</p>
       </div>
 
       <div className="grid gap-6 mb-6">
@@ -137,53 +158,11 @@ export const PromptAssembler = () => {
           </div>
         </Card>
 
-        <DragDropContext onDragEnd={handleDragEnd}>
-          <Droppable droppableId="prompt-items">
-            {(provided) => (
-              <div
-                {...provided.droppableProps}
-                ref={provided.innerRef}
-                className="space-y-2"
-              >
-                {items.map((item, index) => (
-                  <Draggable key={item.id} draggableId={item.id} index={index}>
-                    {(provided) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.draggableProps}
-                        {...provided.dragHandleProps}
-                      >
-                        <Card className="p-4 bg-white hover:shadow-md transition-shadow">
-                          <div className="flex justify-between items-start">
-                            <div className="flex items-center gap-2">
-                              {item.type === "file" ? (
-                                <FileText className="h-4 w-4 text-promptcraft-500" />
-                              ) : null}
-                              <div className="text-sm">
-                                {item.fileName || "Text Block"}
-                              </div>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => removeItem(item.id)}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                          <div className="mt-2 text-sm text-gray-600">
-                            {item.content.substring(0, 100)}...
-                          </div>
-                        </Card>
-                      </div>
-                    )}
-                  </Draggable>
-                ))}
-                {provided.placeholder}
-              </div>
-            )}
-          </Droppable>
-        </DragDropContext>
+        <Card className="p-4">
+          <div className="bg-gray-50 rounded-lg p-4 min-h-[200px]">
+            {renderContent()}
+          </div>
+        </Card>
 
         {items.length > 0 && (
           <Button onClick={exportPrompt} className="mt-4">
