@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from "react";
-import { FileText, Folder } from "lucide-react";
+import { FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
@@ -13,6 +13,10 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import {
+  ScrollArea,
+  ScrollBar
+} from "@/components/ui/scroll-area";
 
 interface PromptItem {
   id: string;
@@ -33,7 +37,6 @@ export const PromptAssembler = () => {
     const newText = e.target.value;
     setText(newText);
 
-    // Check if we should show the command menu
     const lastChar = newText[e.target.selectionStart - 1];
     if (lastChar === "@") {
       const rect = e.target.getBoundingClientRect();
@@ -42,14 +45,10 @@ export const PromptAssembler = () => {
       const lines = textBeforeCursor.split("\n");
       const currentLineNumber = lines.length - 1;
       const currentLineLength = lines[lines.length - 1].length;
-
-      // Approximate position calculation
-      const lineHeight = 20; // Approximate line height in pixels
-      const charWidth = 8; // Approximate character width in pixels
       
       setCommandPosition({
-        top: rect.top + (currentLineNumber * lineHeight),
-        left: rect.left + (currentLineLength * charWidth),
+        top: rect.top + (currentLineNumber * 20),
+        left: rect.left + (currentLineLength * 8),
       });
       setIsCommandOpen(true);
     } else {
@@ -98,7 +97,6 @@ export const PromptAssembler = () => {
   };
 
   const exportPrompt = () => {
-    // Replace file references with actual content
     let finalPrompt = text;
     items.forEach(item => {
       const placeholder = `<file>${item.fileName}</file>`;
@@ -155,11 +153,24 @@ export const PromptAssembler = () => {
                 Upload File
               </label>
             </Button>
-            <Button variant="outline">
-              <Folder className="mr-2 h-4 w-4" />
-              Connect GitHub
-            </Button>
           </div>
+
+          {items.length > 0 && (
+            <ScrollArea className="w-full border rounded-lg p-2 mb-4 bg-gray-50">
+              <div className="flex gap-2 p-1">
+                {items.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center bg-white px-3 py-1.5 rounded-md border shadow-sm"
+                  >
+                    <FileText className="h-4 w-4 text-promptcraft-500 mr-2" />
+                    <span className="text-sm text-gray-700">{item.fileName}</span>
+                  </div>
+                ))}
+              </div>
+              <ScrollBar orientation="horizontal" />
+            </ScrollArea>
+          )}
 
           <div className="relative">
             <Textarea
@@ -207,25 +218,32 @@ export const PromptAssembler = () => {
 
           <style>{`
             .font-mono file {
-              display: inline-block;
-              background-color: #e5e7eb;
-              padding: 2px 6px;
-              border-radius: 4px;
+              display: inline-flex;
+              align-items: center;
+              background-color: #f8fafc;
+              padding: 2px 8px;
+              border-radius: 6px;
               font-family: ui-monospace, monospace;
               white-space: nowrap;
-              color: #4b5563;
-              border: 1px solid #d1d5db;
+              color: #334155;
+              border: 1px solid #e2e8f0;
               margin: 0 2px;
               cursor: pointer;
               position: relative;
               transition: all 0.2s;
+              box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
             }
             .font-mono file:hover {
-              background-color: #d1d5db;
+              background-color: #f1f5f9;
+              border-color: #cbd5e1;
             }
             .font-mono file::before {
-              content: "📄";
-              margin-right: 4px;
+              content: "";
+              background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%236b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>');
+              width: 16px;
+              height: 16px;
+              margin-right: 6px;
+              display: inline-block;
             }
           `}</style>
         </Card>
