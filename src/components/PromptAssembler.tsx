@@ -1,6 +1,5 @@
 
 import React, { useState, useRef, useCallback } from "react";
-import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { FileText, Folder, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,7 +13,6 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface PromptItem {
   id: string;
@@ -59,14 +57,14 @@ export const PromptAssembler = () => {
     }
   };
 
-  const insertFileContent = (file: PromptItem) => {
+  const insertFileReference = (file: PromptItem) => {
     if (!textareaRef.current) return;
 
     const cursorPosition = textareaRef.current.selectionStart;
     const textBeforeCursor = text.substring(0, cursorPosition - 1); // Remove the @
     const textAfterCursor = text.substring(cursorPosition);
     
-    setText(`${textBeforeCursor}${file.content}${textAfterCursor}`);
+    setText(`${textBeforeCursor}[FILE:${file.fileName}]${textAfterCursor}`);
     setIsCommandOpen(false);
   };
 
@@ -90,14 +88,24 @@ export const PromptAssembler = () => {
     reader.readAsText(file);
   };
 
-  const removeItem = (id: string) => {
-    setItems(items.filter((item) => item.id !== id));
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (isCommandOpen) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setIsCommandOpen(false);
+      }
+    }
   };
 
   const exportPrompt = () => {
-    const prompt = text;
+    // Replace file references with actual content
+    let finalPrompt = text;
+    items.forEach(item => {
+      const placeholder = `[FILE:${item.fileName}]`;
+      finalPrompt = finalPrompt.replace(placeholder, item.content);
+    });
     
-    navigator.clipboard.writeText(prompt).then(
+    navigator.clipboard.writeText(finalPrompt).then(
       () => {
         toast({
           title: "Prompt copied!",
@@ -114,7 +122,7 @@ export const PromptAssembler = () => {
       }
     );
 
-    const blob = new Blob([prompt], { type: "text/plain" });
+    const blob = new Blob([finalPrompt], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -158,8 +166,13 @@ export const PromptAssembler = () => {
               ref={textareaRef}
               value={text}
               onChange={handleTextChange}
+              onKeyDown={handleKeyDown}
               placeholder="Write your prompt here... Use @ to mention files"
-              className="min-h-[400px] mb-4 bg-white"
+              className="min-h-[400px] mb-4 bg-white font-mono"
+              style={{
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word'
+              }}
             />
             
             {isCommandOpen && items.length > 0 && (
@@ -171,14 +184,14 @@ export const PromptAssembler = () => {
                 }}
               >
                 <Command className="rounded-lg border shadow-md">
-                  <CommandInput placeholder="Search files..." />
+                  <CommandInput placeholder="Search files..." autoFocus />
                   <CommandList>
                     <CommandEmpty>No files found.</CommandEmpty>
                     <CommandGroup heading="Files">
                       {items.map((item) => (
                         <CommandItem
                           key={item.id}
-                          onSelect={() => insertFileContent(item)}
+                          onSelect={() => insertFileReference(item)}
                           className="flex items-center gap-2"
                         >
                           <FileText className="h-4 w-4" />
@@ -191,6 +204,16 @@ export const PromptAssembler = () => {
               </div>
             )}
           </div>
+
+          <style>{`
+            .font-mono [FILE\\:] {
+              background-color: #e5e7eb;
+              padding: 2px 6px;
+              border-radius: 4px;
+              font-family: ui-monospace, monospace;
+              white-space: nowrap;
+            }
+          `}</style>
         </Card>
 
         {text.length > 0 && (
