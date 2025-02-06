@@ -1,6 +1,6 @@
 
-import React, { useState, useRef, useCallback } from "react";
-import { FileText, Folder, X } from "lucide-react";
+import React, { useState, useRef } from "react";
+import { FileText, Folder } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
@@ -64,7 +64,7 @@ export const PromptAssembler = () => {
     const textBeforeCursor = text.substring(0, cursorPosition - 1); // Remove the @
     const textAfterCursor = text.substring(cursorPosition);
     
-    setText(`${textBeforeCursor}[FILE:${file.fileName}]${textAfterCursor}`);
+    setText(`${textBeforeCursor}<file>${file.fileName}</file>${textAfterCursor}`);
     setIsCommandOpen(false);
   };
 
@@ -101,7 +101,7 @@ export const PromptAssembler = () => {
     // Replace file references with actual content
     let finalPrompt = text;
     items.forEach(item => {
-      const placeholder = `[FILE:${item.fileName}]`;
+      const placeholder = `<file>${item.fileName}</file>`;
       finalPrompt = finalPrompt.replace(placeholder, item.content);
     });
     
@@ -206,12 +206,26 @@ export const PromptAssembler = () => {
           </div>
 
           <style>{`
-            .font-mono [FILE\\:] {
+            .font-mono file {
+              display: inline-block;
               background-color: #e5e7eb;
               padding: 2px 6px;
               border-radius: 4px;
               font-family: ui-monospace, monospace;
               white-space: nowrap;
+              color: #4b5563;
+              border: 1px solid #d1d5db;
+              margin: 0 2px;
+              cursor: pointer;
+              position: relative;
+              transition: all 0.2s;
+            }
+            .font-mono file:hover {
+              background-color: #d1d5db;
+            }
+            .font-mono file::before {
+              content: "📄";
+              margin-right: 4px;
             }
           `}</style>
         </Card>
