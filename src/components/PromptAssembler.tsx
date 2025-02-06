@@ -3,6 +3,7 @@ import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { FileText, Folder, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
 
 interface PromptItem {
   id: string;
@@ -14,6 +15,7 @@ interface PromptItem {
 export const PromptAssembler = () => {
   const [items, setItems] = useState<PromptItem[]>([]);
   const [text, setText] = useState("");
+  const { toast } = useToast();
 
   const handleDragEnd = (result: any) => {
     if (!result.destination) return;
@@ -64,8 +66,25 @@ export const PromptAssembler = () => {
 
   const exportPrompt = () => {
     const prompt = items.map((item) => item.content).join("\n\n");
-    console.log("Assembled Prompt:", prompt);
-    // You can add a toast notification here
+    
+    // Copy to clipboard
+    navigator.clipboard.writeText(prompt).then(
+      () => {
+        toast({
+          title: "Prompt exported!",
+          description: "The assembled prompt has been copied to your clipboard.",
+        });
+        console.log("Assembled Prompt:", prompt);
+      },
+      (err) => {
+        toast({
+          title: "Failed to copy",
+          description: "Please try again or copy manually.",
+          variant: "destructive",
+        });
+        console.error("Failed to copy:", err);
+      }
+    );
   };
 
   return (
