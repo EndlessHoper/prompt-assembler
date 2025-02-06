@@ -1,11 +1,20 @@
 
-import React, { useState } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { FileText, Folder, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface PromptItem {
   id: string;
@@ -17,16 +26,48 @@ interface PromptItem {
 export const PromptAssembler = () => {
   const [items, setItems] = useState<PromptItem[]>([]);
   const [text, setText] = useState("");
+  const [isCommandOpen, setIsCommandOpen] = useState(false);
+  const [commandPosition, setCommandPosition] = useState({ top: 0, left: 0 });
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
 
-  const handleDragEnd = (result: any) => {
-    if (!result.destination) return;
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newText = e.target.value;
+    setText(newText);
 
-    const newItems = Array.from(items);
-    const [reorderedItem] = newItems.splice(result.source.index, 1);
-    newItems.splice(result.destination.index, 0, reorderedItem);
+    // Check if we should show the command menu
+    const lastChar = newText[e.target.selectionStart - 1];
+    if (lastChar === "@") {
+      const rect = e.target.getBoundingClientRect();
+      const position = e.target.selectionStart;
+      const textBeforeCursor = newText.substring(0, position);
+      const lines = textBeforeCursor.split("\n");
+      const currentLineNumber = lines.length - 1;
+      const currentLineLength = lines[lines.length - 1].length;
 
-    setItems(newItems);
+      // Approximate position calculation
+      const lineHeight = 20; // Approximate line height in pixels
+      const charWidth = 8; // Approximate character width in pixels
+      
+      setCommandPosition({
+        top: rect.top + (currentLineNumber * lineHeight),
+        left: rect.left + (currentLineLength * charWidth),
+      });
+      setIsCommandOpen(true);
+    } else {
+      setIsCommandOpen(false);
+    }
+  };
+
+  const insertFileContent = (file: PromptItem) => {
+    if (!textareaRef.current) return;
+
+    const cursorPosition = textareaRef.current.selectionStart;
+    const textBeforeCursor = text.substring(0, cursorPosition - 1); // Remove the @
+    const textAfterCursor = text.substring(cursorPosition);
+    
+    setText(`${textBeforeCursor}${file.content}${textAfterCursor}`);
+    setIsCommandOpen(false);
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -49,27 +90,13 @@ export const PromptAssembler = () => {
     reader.readAsText(file);
   };
 
-  const addText = () => {
-    if (!text.trim()) return;
-    setItems([
-      ...items,
-      {
-        id: Math.random().toString(),
-        content: text,
-        type: "text",
-      },
-    ]);
-    setText("");
-  };
-
   const removeItem = (id: string) => {
     setItems(items.filter((item) => item.id !== id));
   };
 
   const exportPrompt = () => {
-    const prompt = items.map((item) => item.content).join("\n\n");
+    const prompt = text;
     
-    // Copy to clipboard
     navigator.clipboard.writeText(prompt).then(
       () => {
         toast({
@@ -87,7 +114,6 @@ export const PromptAssembler = () => {
       }
     );
 
-    // Download as .txt file
     const blob = new Blob([prompt], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -127,53 +153,47 @@ export const PromptAssembler = () => {
             </Button>
           </div>
 
-          <DragDropContext onDragEnd={handleDragEnd}>
-            <Droppable droppableId="prompt-items">
-              {(provided) => (
-                <div
-                  {...provided.droppableProps}
-                  ref={provided.innerRef}
-                  className="min-h-[400px] bg-gray-50 rounded-lg p-4"
-                >
-                  <Textarea
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    placeholder="Write your prompt here..."
-                    className="min-h-[200px] mb-4 bg-white"
-                  />
-                  {items.map((item, index) => (
-                    <Draggable key={item.id} draggableId={item.id} index={index}>
-                      {(provided) => (
-                        <div
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          {...provided.dragHandleProps}
-                          className="mb-2"
+          <div className="relative">
+            <Textarea
+              ref={textareaRef}
+              value={text}
+              onChange={handleTextChange}
+              placeholder="Write your prompt here... Use @ to mention files"
+              className="min-h-[400px] mb-4 bg-white"
+            />
+            
+            {isCommandOpen && items.length > 0 && (
+              <div 
+                className="absolute z-50"
+                style={{
+                  top: commandPosition.top + 24,
+                  left: commandPosition.left,
+                }}
+              >
+                <Command className="rounded-lg border shadow-md">
+                  <CommandInput placeholder="Search files..." />
+                  <CommandList>
+                    <CommandEmpty>No files found.</CommandEmpty>
+                    <CommandGroup heading="Files">
+                      {items.map((item) => (
+                        <CommandItem
+                          key={item.id}
+                          onSelect={() => insertFileContent(item)}
+                          className="flex items-center gap-2"
                         >
-                          {item.type === "file" && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="flex items-center gap-2 bg-white hover:bg-gray-100"
-                              onClick={() => removeItem(item.id)}
-                            >
-                              <FileText className="h-4 w-4 text-promptcraft-500" />
-                              {item.fileName}
-                              <X className="h-3 w-3 ml-2" />
-                            </Button>
-                          )}
-                        </div>
-                      )}
-                    </Draggable>
-                  ))}
-                  {provided.placeholder}
-                </div>
-              )}
-            </Droppable>
-          </DragDropContext>
+                          <FileText className="h-4 w-4" />
+                          {item.fileName}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </div>
+            )}
+          </div>
         </Card>
 
-        {items.length > 0 && (
+        {text.length > 0 && (
           <Button onClick={exportPrompt} className="mt-4">
             Export Prompt
           </Button>
