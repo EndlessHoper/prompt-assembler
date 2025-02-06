@@ -71,20 +71,30 @@ export const PromptAssembler = () => {
     navigator.clipboard.writeText(prompt).then(
       () => {
         toast({
-          title: "Prompt exported!",
+          title: "Prompt copied!",
           description: "The assembled prompt has been copied to your clipboard.",
         });
-        console.log("Assembled Prompt:", prompt);
       },
       (err) => {
         toast({
           title: "Failed to copy",
-          description: "Please try again or copy manually.",
+          description: "Please try again or use the downloaded file.",
           variant: "destructive",
         });
         console.error("Failed to copy:", err);
       }
     );
+
+    // Download as .txt file
+    const blob = new Blob([prompt], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "assembled-prompt.txt";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   return (
