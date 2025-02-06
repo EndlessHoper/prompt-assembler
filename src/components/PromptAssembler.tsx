@@ -99,25 +99,6 @@ export const PromptAssembler = () => {
     URL.revokeObjectURL(url);
   };
 
-  const renderContent = () => {
-    return items.map((item, index) => (
-      <div key={item.id} className="mb-2">
-        {item.type === "text" ? (
-          <p className="text-gray-700">{item.content}</p>
-        ) : (
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex items-center gap-2 bg-gray-50 hover:bg-gray-100"
-          >
-            <FileText className="h-4 w-4 text-promptcraft-500" />
-            {item.fileName}
-          </Button>
-        )}
-      </div>
-    ));
-  };
-
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="mb-6">
@@ -127,18 +108,7 @@ export const PromptAssembler = () => {
 
       <div className="grid gap-6 mb-6">
         <Card className="p-4">
-          <div className="flex gap-4 mb-4">
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="Enter your text..."
-              className="flex-1 p-2 border rounded-md"
-              rows={3}
-            />
-            <Button onClick={addText}>Add Text</Button>
-          </div>
-
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 mb-4">
             <Button variant="outline" asChild>
               <label className="cursor-pointer">
                 <input
@@ -156,12 +126,51 @@ export const PromptAssembler = () => {
               Connect GitHub
             </Button>
           </div>
-        </Card>
 
-        <Card className="p-4">
-          <div className="bg-gray-50 rounded-lg p-4 min-h-[200px]">
-            {renderContent()}
-          </div>
+          <DragDropContext onDragEnd={handleDragEnd}>
+            <Droppable droppableId="prompt-items">
+              {(provided) => (
+                <div
+                  {...provided.droppableProps}
+                  ref={provided.innerRef}
+                  className="min-h-[400px] bg-gray-50 rounded-lg p-4"
+                >
+                  <Textarea
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    placeholder="Write your prompt here..."
+                    className="min-h-[200px] mb-4 bg-white"
+                  />
+                  {items.map((item, index) => (
+                    <Draggable key={item.id} draggableId={item.id} index={index}>
+                      {(provided) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.draggableProps}
+                          {...provided.dragHandleProps}
+                          className="mb-2"
+                        >
+                          {item.type === "file" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="flex items-center gap-2 bg-white hover:bg-gray-100"
+                              onClick={() => removeItem(item.id)}
+                            >
+                              <FileText className="h-4 w-4 text-promptcraft-500" />
+                              {item.fileName}
+                              <X className="h-3 w-3 ml-2" />
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </Draggable>
+                  ))}
+                  {provided.placeholder}
+                </div>
+              )}
+            </Droppable>
+          </DragDropContext>
         </Card>
 
         {items.length > 0 && (
