@@ -80,22 +80,28 @@ export const PromptAssembler = () => {
   const editor = useMemo(() => withFileMentions(withReact(createEditor())), []);
   const [editorValue, setEditorValue] = useState<Descendant[]>([{
     type: 'paragraph',
-    children: [{ text: 'Type @ to mention a file...' }],
+    children: [{ text: '' }],
   }]);
+  const [showPlaceholder, setShowPlaceholder] = useState(true);
   const [target, setTarget] = useState<Range | null>(null);
   const [search, setSearch] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [files, setFiles] = useState<{ id: string; fileName: string; content: string }[]>([]);
   const { toast } = useToast();
 
-  // Clear initial text when focused
+  // Handle focus
   const handleFocus = useCallback(() => {
-    if (editorValue.length === 1 && 
-        SlateElement.isElement(editorValue[0]) && 
-        editorValue[0].children.length === 1 && 
-        editorValue[0].children[0].text === 'Type @ to mention a file...') {
-      setEditorValue([{ type: 'paragraph', children: [{ text: '' }] }]);
-    }
+    setShowPlaceholder(false);
+  }, []);
+
+  // Handle blur
+  const handleBlur = useCallback(() => {
+    // Only show placeholder if editor is empty
+    const isEditorEmpty = editorValue.length === 1 && 
+      SlateElement.isElement(editorValue[0]) && 
+      editorValue[0].children.length === 1 && 
+      editorValue[0].children[0].text === '';
+    setShowPlaceholder(isEditorEmpty);
   }, [editorValue]);
 
   const filteredFiles = files.filter(file =>
@@ -307,28 +313,36 @@ export const PromptAssembler = () => {
           </div>
 
           <Slate editor={editor} initialValue={editorValue} onChange={onChange}>
-            <Editable 
-              renderElement={renderElement} 
-              onKeyDown={onKeyDown}
-              onFocus={handleFocus}
-              className="min-h-[200px] p-4 border rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500" 
-            />
-            {target && filteredFiles.length > 0 && (
-              <div className="absolute z-10 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 max-h-[200px] overflow-y-auto">
-                {filteredFiles.map((file, i) => (
-                  <div
-                    key={file.id}
-                    className={`p-2 flex items-center cursor-pointer hover:bg-gray-50 ${
-                      i === selectedIndex ? 'bg-blue-50 text-blue-900' : 'text-gray-900'
-                    }`}
-                    onMouseDown={() => insertFileMention(file)}
-                  >
-                    <FileText className="h-4 w-4 mr-2 text-gray-400" />
-                    {file.fileName}
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className="relative">
+              <Editable 
+                renderElement={renderElement} 
+                onKeyDown={onKeyDown}
+                onFocus={handleFocus}
+                onBlur={handleBlur}
+                className="min-h-[200px] p-4 border rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500" 
+              />
+              {showPlaceholder && (
+                <div className="absolute inset-0 pointer-events-none p-4 text-gray-400">
+                  Type @ to mention a file...
+                </div>
+              )}
+              {target && filteredFiles.length > 0 && (
+                <div className="absolute z-10 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 max-h-[200px] overflow-y-auto">
+                  {filteredFiles.map((file, i) => (
+                    <div
+                      key={file.id}
+                      className={`p-2 flex items-center cursor-pointer hover:bg-gray-50 ${
+                        i === selectedIndex ? 'bg-blue-50 text-blue-900' : 'text-gray-900'
+                      }`}
+                      onMouseDown={() => insertFileMention(file)}
+                    >
+                      <FileText className="h-4 w-4 mr-2 text-gray-400" />
+                      {file.fileName}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </Slate>
 
           <div className="flex gap-2 mt-4">
