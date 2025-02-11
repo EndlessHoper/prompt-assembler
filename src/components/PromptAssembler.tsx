@@ -14,12 +14,16 @@ import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { marked } from 'marked';
 import { useDropzone } from 'react-dropzone';
+import { FileMention } from './FileMention';
+import { UrlMention } from './UrlMention';
+import { FilesContext, FileData } from '../contexts/FilesContext';
+import { URL_REGEX, generateFilenameFromUrl, fetchUrlContent, UrlMentionElement } from '../lib/urlFetcher';
 
-// Define a custom type for file mentions
+// Define custom types for file mentions
 type FileMentionElement = {
   type: 'file-mention';
   fileName: string;
-  children: [{ text: '' }]; // Required for void nodes
+  children: [{ text: '' }];
 };
 
 type ParagraphElement = {
@@ -27,7 +31,7 @@ type ParagraphElement = {
   children: CustomText[];
 };
 
-type CustomElement = FileMentionElement | ParagraphElement;
+type CustomElement = FileMentionElement | UrlMentionElement | ParagraphElement;
 type CustomText = { text: string };
 
 declare module 'slate' {
@@ -38,11 +42,13 @@ declare module 'slate' {
   }
 }
 
-// Plugin to handle inline file mentions
-const withFileMentions = (editor: Editor) => {
+// Plugin to handle inline mentions
+const withMentions = (editor: Editor) => {
   const { isInline, isVoid } = editor;
-  editor.isInline = element => (element.type === 'file-mention' ? true : isInline(element));
-  editor.isVoid = element => (element.type === 'file-mention' ? true : isVoid(element));
+  editor.isInline = element => 
+    (element.type === 'file-mention' || element.type === 'url-mention') ? true : isInline(element);
+  editor.isVoid = element => 
+    (element.type === 'file-mention' || element.type === 'url-mention') ? true : isVoid(element);
   return editor;
 };
 
@@ -50,34 +56,12 @@ const withFileMentions = (editor: Editor) => {
 const initialValue: Descendant[] = [
   {
     type: 'paragraph',
-    children: [{ text: 'Type @ to mention a file...' }],
+    children: [{ text: 'Type @ to mention a file or paste a URL...' }],
   },
 ];
 
-// Component to render inline file mentions
-const FileMention = ({ attributes, children, element }) => {
-  const { files } = React.useContext(FilesContext);
-  const fileExists = files.some(f => f.fileName === element.fileName);
-  
-  return (
-    <span {...attributes} contentEditable={false} className={`inline-flex items-center px-1.5 py-0.5 rounded-md border transition-colors ${
-      fileExists 
-        ? 'bg-blue-50 text-blue-900 border-blue-100 hover:bg-blue-100'
-        : 'bg-red-50 text-red-900 border-red-100 hover:bg-red-100'
-    }`}>
-      <FileText className={`inline-block h-3.5 w-3.5 mr-1 ${fileExists ? 'text-blue-500' : 'text-red-500'}`} />
-      {element.fileName}
-      {!fileExists && <span className="text-xs ml-1 text-red-600">(missing)</span>}
-      {children}
-    </span>
-  );
-};
-
-// Create a context for files
-const FilesContext = React.createContext<{ files: { id: string; fileName: string; content: string }[] }>({ files: [] });
-
 export const PromptAssembler = () => {
-  const editor = useMemo(() => withFileMentions(withReact(createEditor())), []);
+  const editor = useMemo(() => withMentions(withReact(createEditor())), []);
   const [editorValue, setEditorValue] = useState<Descendant[]>([{
     type: 'paragraph',
     children: [{ text: '' }],
@@ -86,7 +70,7 @@ export const PromptAssembler = () => {
   const [target, setTarget] = useState<Range | null>(null);
   const [search, setSearch] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [files, setFiles] = useState<{ id: string; fileName: string; content: string }[]>([]);
+  const [files, setFiles] = useState<FileData[]>([]);
   const { toast } = useToast();
 
   // Handle focus
@@ -112,6 +96,9 @@ export const PromptAssembler = () => {
     const { attributes, children, element } = props;
     if (element.type === 'file-mention') {
       return <FileMention {...props} />;
+    }
+    if (element.type === 'url-mention') {
+      return <UrlMention {...props} />;
     }
     return <p {...attributes}>{children}</p>;
   }, []);
@@ -161,7 +148,7 @@ export const PromptAssembler = () => {
     [selectedIndex, filteredFiles, target]
   );
 
-  const insertFileMention = (file: { id: string; fileName: string; content: string }) => {
+  const insertFileMention = (file: FileData) => {
     if (target) {
       Transforms.select(editor, target);
       Transforms.delete(editor);
@@ -225,8 +212,11 @@ export const PromptAssembler = () => {
         if (SlateElement.isElement(n)) {
           if (n.type === 'file-mention') {
             const file = files.find(f => f.fileName === n.fileName);
-            // Strip HTML tags from markdown content
-            return file ? file.content.replace(/<[^>]*>/g, '') : '';
+            return file ? file.content : '';
+          }
+          if (n.type === 'url-mention') {
+            const file = files.find(f => f.fileName === n.fileName);
+            return file ? file.content : '';
           }
           return serialize(n.children);
         }
@@ -236,12 +226,16 @@ export const PromptAssembler = () => {
 
   const exportPrompt = () => {
     const finalPrompt = serialize(editorValue);
+    console.log('Exporting prompt with content:', finalPrompt);
+    console.log('Current files:', files);
     navigator.clipboard.writeText(finalPrompt);
     toast({ title: 'Prompt copied!', description: 'Copied to clipboard' });
   };
 
   const downloadPrompt = () => {
     const finalPrompt = serialize(editorValue);
+    console.log('Downloading prompt with content:', finalPrompt);
+    console.log('Current files:', files);
     const blob = new Blob([finalPrompt], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -253,6 +247,64 @@ export const PromptAssembler = () => {
     URL.revokeObjectURL(url);
     toast({ title: 'Prompt downloaded!', description: 'Saved as prompt.md' });
   };
+
+  // Process pasted text for URLs
+  const handlePaste = useCallback(
+    async (event: React.ClipboardEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      const pastedText = event.clipboardData.getData('text');
+      
+      // Check if the pasted text contains a URL
+      const urlMatch = pastedText.match(URL_REGEX);
+      if (urlMatch) {
+        const url = urlMatch[0];
+        const fileName = generateFilenameFromUrl(url);
+        
+        // Create URL mention node
+        const urlNode: UrlMentionElement = {
+          type: 'url-mention',
+          url,
+          fileName,
+          children: [{ text: '' }],
+        };
+        
+        // Insert the URL mention
+        Transforms.insertNodes(editor, urlNode);
+        
+        // Fetch and process the URL content
+        toast({ title: 'Fetching URL...', description: url });
+        try {
+          const content = await fetchUrlContent(url);
+          
+          // Add the fetched content as a new file
+          const newFile = {
+            id: Math.random().toString(),
+            fileName,
+            content,
+          };
+          
+          setFiles(prevFiles => [...prevFiles, newFile]);
+          toast({ title: 'URL fetched!', description: `Saved as ${fileName}` });
+        } catch (error) {
+          console.error('Error processing URL:', error);
+          toast({ 
+            title: 'Error fetching URL', 
+            description: 'Failed to fetch content. Please try again.',
+            variant: 'destructive'
+          });
+        }
+      } else {
+        // Handle regular paste
+        const fragment = event.clipboardData.getData('text/plain');
+        const nodes: ParagraphElement[] = fragment.split('\n').map(line => ({
+          type: 'paragraph' as const,
+          children: [{ text: line }],
+        }));
+        Transforms.insertNodes(editor, nodes);
+      }
+    },
+    [editor, toast]
+  );
 
   return (
     <FilesContext.Provider value={{ files }}>
@@ -319,11 +371,12 @@ export const PromptAssembler = () => {
                 onKeyDown={onKeyDown}
                 onFocus={handleFocus}
                 onBlur={handleBlur}
+                onPaste={handlePaste}
                 className="min-h-[200px] p-4 border rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500" 
               />
               {showPlaceholder && (
                 <div className="absolute inset-0 pointer-events-none p-4 text-gray-400">
-                  Type @ to mention a file...
+                  Type @ to mention a file or paste a URL...
                 </div>
               )}
               {target && filteredFiles.length > 0 && (
